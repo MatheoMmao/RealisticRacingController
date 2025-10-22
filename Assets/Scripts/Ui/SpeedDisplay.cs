@@ -5,16 +5,15 @@ public class SpeedDisplay : MonoBehaviour
 {
     TMP_Text text;
 
-    CarController car;
+    RealisticCarController car;
 
     private void Start()
     {
         text = GetComponent<TMP_Text>();
-        car = FindAnyObjectByType<CarController>();
+        car = FindAnyObjectByType<RealisticCarController>();
     }
 
     private void Update()
     {
-        text.text = (int)car.GetSpeed() + " km/h";
     }
 }

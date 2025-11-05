@@ -11268,7 +11268,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   airDensity: 1.29
   minEngineTorque: 400
-  maxEngineTorque: 500
+  maxEngineTorque: 475
   minEngineRPM: 1000
   maxEngineRPM: 6000
   RPMToTorqueCurve:
@@ -11278,13 +11278,13 @@ MonoBehaviour:
       time: 0
       value: 0
       inSlope: 0
-      outSlope: 0.5
+      outSlope: 0
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.8
+      time: 0.68
       value: 1
       inSlope: 0
       outSlope: 0
@@ -11296,7 +11296,7 @@ MonoBehaviour:
       time: 1
       value: 0
       inSlope: -4
-      outSlope: 0
+      outSlope: -4
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
@@ -11304,23 +11304,23 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  RPM: 0
+  RPM: 4400
   engineForce: 0
   frictionCoef: 0.3
   frontalArea: 2.2
   rollResistance: 12.8
-  mass: 100
+  mass: 1439
   gearRatio: 2.66
   differentialRatio: 3.42
   transmissionEfficiency: 0.7
-  centerOfGravity: {x: 0, y: 0.1, z: 0}
+  centerOfGravity: {x: 0, y: 0.15, z: 0}
   wheelRadius: 0.34
   wheelControls:
   - {fileID: 1840339356}
   - {fileID: 838992585}
   - {fileID: 1623787635}
   - {fileID: 1285224149}
-  wheelFrictionCoef: 1.5
+  wheelFrictionCoef: 1
   tractionForce: {x: 0, y: 0}
   dragForce: {x: 0, y: 0}
   rollResistanceForce: {x: 0, y: 0}
@@ -11328,7 +11328,7 @@ MonoBehaviour:
   velocity: {x: 0, y: 0}
   acceleration: {x: 0, y: 0}
   engineTorque: 0
-  wheelWeightSupported: []
+  wheelTorque: 0
   wheelMaxFriction: []
 --- !u!1 &1712942324
 GameObject:

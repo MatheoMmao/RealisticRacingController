@@ -2,6 +2,7 @@ using UnityEngine;
 
 public class CarController : MonoBehaviour
 {
+    [Header("Car Properties")]
     public float motorTorque = 2000f;
     public float brakeTorque = 2000f;
     public float maxSpeed = 20f;
@@ -10,31 +11,31 @@ public class CarController : MonoBehaviour
     public float centreOfGravityOffset = -1f;
 
     private WheelControl[] wheels;
+    private Rigidbody rigidBody;
 
-    Rigidbody rigidbody;
-
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    // Start is called before the first frame update
     void Start()
     {
-        rigidbody = GetComponent<Rigidbody>();
+        rigidBody = GetComponent<Rigidbody>();
+
+        // Adjust center of mass to improve stability and prevent rolling
+        Vector3 centerOfMass = rigidBody.centerOfMass;
+        centerOfMass.y += centreOfGravityOffset;
+        rigidBody.centerOfMass = centerOfMass;
 
         // Get all wheel components attached to the car
         wheels = GetComponentsInChildren<WheelControl>();
     }
 
-    // Update is called once per frame
-    void Update()
+    // FixedUpdate is called at a fixed time interval 
+    void FixedUpdate()
     {
-        
-    }
-
-    private void FixedUpdate()
-    {
+        // Get player input for acceleration and steering
         float vInput = Input.GetAxis("Vertical"); // Forward/backward input
         float hInput = Input.GetAxis("Horizontal"); // Steering input
 
         // Calculate current speed along the car's forward axis
-        float forwardSpeed = Vector3.Dot(transform.forward, rigidbody.linearVelocity);
+        float forwardSpeed = Vector3.Dot(transform.forward, rigidBody.linearVelocity);
         float speedFactor = Mathf.InverseLerp(0, maxSpeed, Mathf.Abs(forwardSpeed)); // Normalized speed factor
 
         // Reduce motor torque and steering at high speeds for better handling
@@ -69,15 +70,5 @@ public class CarController : MonoBehaviour
                 wheel.WheelCollider.brakeTorque = Mathf.Abs(vInput) * brakeTorque;
             }
         }
-    }
-
-    /// <summary>
-    /// Return the speed of the car in km/h
-    /// </summary>
-    /// <returns></returns>
-    public float GetSpeed()
-    {
-        float speedMeterPerSecond = rigidbody.linearVelocity.magnitude;
-        return speedMeterPerSecond * 3.6f;
     }
 }

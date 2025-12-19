@@ -127,7 +127,7 @@ public class MyWheelCollider : MonoBehaviour
             // Temporary steer and resistance force
             if (steerable)
             {
-                Vector3 steeringDir = Vector3.
+                Vector3 steeringDir = Vector3.right;
 
                 float dir = Input.GetAxis("Horizontal");
 

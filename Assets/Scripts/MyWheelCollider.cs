@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem.HID;
@@ -23,6 +24,8 @@ public class MyWheelCollider : MonoBehaviour
     [SerializeField] float tireGripFactor = 1;
     [SerializeField] AnimationCurve tireGripCurve = new AnimationCurve(new Keyframe(0, 0.6f, 0, -0.3f), new Keyframe(0.3f, 0.5f, -0.3f,0),
         new Keyframe(0.5f,0.1f,0,0), new Keyframe(1,0.05f,0,0));
+    [SerializeField] float wheelTorque = 0f;
+    float wheelRPM = 0;
 
     [Header("Vehicle")]
     [SerializeField] private Rigidbody carRigidbody;
@@ -44,6 +47,7 @@ public class MyWheelCollider : MonoBehaviour
     bool hasRaycastHit;
 
     Vector3 lastFramePos = Vector3.zero;
+    Vector3 tireVel;
 
 
     // Debug
@@ -76,10 +80,12 @@ public class MyWheelCollider : MonoBehaviour
 
     private void FixedUpdate()
     {
+        CalculateTireVelocity();
         CheckGroundedState();
         UpdateWheelSuspensionForce();
         UpdateWheelSteerForce();
         UpdateAccelerationForce();
+        CalculateRPM();
     }
 
     void CheckGroundedState()
@@ -94,7 +100,7 @@ public class MyWheelCollider : MonoBehaviour
             visualWheelMaterial.color = Color.red;
         }
 
-        if (Physics.Raycast(ray, out hit, springLength + wheelRadius))
+        if (Physics.Raycast(ray, out hit, springLength + wheelRadius,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
         {
             hasRaycastHit = true;
             if (hit.distance < wheelTransform.localPosition.y - wheelVisualStartLocalPos.y + springLength + wheelRadius)
@@ -118,9 +124,9 @@ public class MyWheelCollider : MonoBehaviour
             {
                 float move = Input.GetAxis("Vertical");
 
-                forwardForce += move * 3000;
+                forwardForce += wheelTorque/wheelRadius;
 
-                carRigidbody.AddForceAtPosition(move * transform.forward * 3000, transform.position);
+                carRigidbody.AddForceAtPosition(tireTransform.forward * (wheelTorque / wheelRadius), tireTransform.position);
             }
 
             Vector3 velocity = carRigidbody.GetPointVelocity(transform.position);
@@ -148,13 +154,11 @@ public class MyWheelCollider : MonoBehaviour
 
             Vector3 steeringDir = tireTransform.right;
 
-            Vector3 tireVel = (tireTransform.position - lastFramePos) / Time.fixedDeltaTime;
-
             float rightVelocity = Vector3.Dot(steeringDir, tireVel);
 
             
 
-            float rightAcceleration = -rightVelocity* /*tireGripCurve.Evaluate(Mathf.Abs(rightVelocity) / tireVel.magnitude)*/0.2f / Time.fixedDeltaTime;
+            float rightAcceleration = -rightVelocity* /*tireGripCurve.Evaluate(Mathf.Abs(rightVelocity) / tireVel.magnitude)*/tireGripFactor / Time.fixedDeltaTime;
 
             carRigidbody.AddForceAtPosition(rightAcceleration * wheelMass * steeringDir, tireTransform.position);
             rightForce = rightAcceleration * wheelMass;
@@ -162,10 +166,7 @@ public class MyWheelCollider : MonoBehaviour
 
         wheelTransform.rotation = tireTransform.rotation;
         wheelTransform.Rotate(-90, 90, 0);
-
-        lastFramePos = tireTransform.position;
     }
-
 
     void UpdateWheelSuspensionForce()
     {
@@ -230,5 +231,42 @@ public class MyWheelCollider : MonoBehaviour
         Handles.color = Color.blue;
         Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.forward, transform.up), forwardForce / 1000, EventType.Repaint);
         Handles.color = color;
+    }
+
+    public void SetWheelTorque(float torque)
+    {
+        wheelTorque = torque;
+    }
+
+    public float GetWheelRadius()
+    {
+        return wheelRadius;
+    }
+
+    void CalculateRPM()
+    {
+        float longitudinalSpeed = Vector3.Dot(tireTransform.forward, tireVel);
+
+        float wheelOmega = longitudinalSpeed / wheelRadius;
+
+         wheelRPM = wheelOmega * 60f / (2f * Mathf.PI);
+    }
+
+    void CalculateTireVelocity()
+    {
+        tireVel = (tireTransform.position - lastFramePos) / Time.fixedDeltaTime;
+
+
+        lastFramePos = tireTransform.position;
+    }
+
+    public bool IsMotorized()
+    {
+        return motorized;
+    }
+
+    public float GetRPM()
+    {
+        return wheelRPM;
     }
 }

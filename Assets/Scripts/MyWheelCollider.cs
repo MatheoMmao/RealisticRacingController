@@ -1,69 +1,116 @@
-using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.InputSystem.HID;
 
 public class MyWheelCollider : MonoBehaviour
 {
+    #region State
     [Header("State")]
-    [SerializeField] bool steerable = false;
-    [SerializeField] bool motorized = false;
-    [SerializeField] bool breakable = true;
+    [SerializeField] 
+    bool steerable = false;
+    [SerializeField] 
+    bool motorized = false;
+    [SerializeField] 
+    bool breakable = true;
+    #endregion
 
+    #region Suspension
     [Header("Suspension")]
-    [SerializeField] private float minSpringLength = 0.05f; // Recomended to not put 0 as the min distance
-    [SerializeField] private float springLength = 1f;
-    [SerializeField, Range(0f, 1f)] private float restRatio = 0.5f;
-    [SerializeField] private float springStrength = 30000f;
-    [SerializeField] private float damperStrength = 4500f;
+    [SerializeField] 
+    private float minSpringLength = 0.05f; // Recomended to not put 0 as the min distance
+    [SerializeField] 
+    private float springLength = 1f;
+    [SerializeField, Range(0f, 1f)] 
+    private float restRatio = 0.5f;
+    [SerializeField] 
+    private float springStrength = 30000f;
+    [SerializeField] 
+    private float damperStrength = 4500f;
+    private float restLength;
+    private float currentLength;
+    #endregion
 
+    #region Wheel
     [Header("Wheel")]
-    [SerializeField] private float wheelMass = 30f;
-    [SerializeField] private float wheelRadius = 0.25f;
-    [SerializeField] private Transform wheelTransform; // Visual wheel
-    [SerializeField] private float maxAngleSteer = 30f;
-    [SerializeField] float tireGripFactor = 1;
+    [SerializeField] 
+    private float wheelMass = 30f;
+    [SerializeField] 
+    private float wheelRadius = 0.25f;
+    [SerializeField] 
+    private Transform wheelTransform; // Visual wheel
+    [SerializeField] 
+    private float maxAngleSteer = 30f;
+    [SerializeField] 
+    float tireGripFactor = 1;
     [SerializeField]
     AnimationCurve tireGripCurve = new AnimationCurve(new Keyframe(0, 0.6f, 0, -0.3f), new Keyframe(0.3f, 0.5f, -0.3f, 0),
         new Keyframe(0.5f, 0.1f, 0, 0), new Keyframe(1, 0.05f, 0, 0));
-    [SerializeField] float wheelTorque = 0f;
+    [SerializeField] 
+    float wheelTorque = 0f;
     public bool debugWheel = false;
-    [SerializeField] float maxBreakTorque = 100f;
+    [SerializeField] 
+    float maxBreakTorque = 100f;
 
-    [Header("Vehicle")]
-    [SerializeField] private Rigidbody carRigidbody;
+    [System.Serializable]
+    public class TireCoefficients
+    {
+        [Header("Shape Factor")]
+        [Tooltip("Shape factor - controls the shape of the curve")]
+        public float C = 1.3f;
+
+        [Header("Peak Factor")]
+        [Tooltip("Peak factor - determines the maximum force")]
+        public float D = 1.0f;
+
+        [Header("Stiffness Factor")]
+        [Tooltip("BCD - product that represents cornering stiffness")]
+        public float BCD = 10.0f;
+
+        [Header("Curvature Factor")]
+        [Tooltip("Curvature factor - affects curve shape")]
+        public float E = 0.97f;
+
+        [Header("Horizontal Shift")]
+        [Tooltip("Horizontal offset")]
+        public float Sh = 0.0f;
+
+        [Header("Vertical Shift")]
+        [Tooltip("Vertical offset")]
+        public float Sv = 0.0f;
+    }
+
+    [Header("Tire Parameters")]
+    public TireCoefficients lateralCoefficients;
+    public TireCoefficients longitudinalCoefficients;
 
     Transform tireTransform;
     private Vector3 wheelVisualStartLocalPos;
-    private float restLength;
-    private float currentLength;
-
+    Vector3 wheelVisualStartRotation;
     float wheelRPM = 0;
-    float breakValue = 0f;
-    private float angleSteer = 0f;
-
     bool grounded = false;
-
-    Material visualWheelMaterial;
-
-    RaycastHit hit;
-    bool hasRaycastHit;
-
     Vector3 lastFramePos = Vector3.zero;
     Vector3 tireVel;
+    #endregion
 
+    #region Other
+    [Header("Vehicle")]
+    [SerializeField] 
+    private Rigidbody carRigidbody;
+    float breakValue = 0f;
+    private float angleSteer = 0f;
+    RaycastHit hit;
+    bool hasRaycastHit;
     float loadSupported = 0f;
-
-    // Debug
     float upForce;
     float rightForce;
     float forwardForce;
+    #endregion
 
     private void Awake()
     {
         restLength = springLength * restRatio;
         currentLength = restLength;
 
+        // Create a gameobject to represent the tire transform (used to separate visual and physics calculations
         GameObject tireGo = new GameObject();
         tireTransform = tireGo.transform;
         tireTransform.position = wheelTransform.position;
@@ -75,10 +122,12 @@ public class MyWheelCollider : MonoBehaviour
         if (wheelTransform != null)
         {
             wheelVisualStartLocalPos = wheelTransform.localPosition + Vector3.up * restLength; // save starting position
-            visualWheelMaterial = wheelTransform.GetComponent<MeshRenderer>()?.material;
+            wheelVisualStartRotation = wheelTransform.localRotation.eulerAngles;
         }
         else
+        {
             Debug.LogError("No wheelTransform (visual wheel) has been assigned!");
+        }
     }
 
     private void FixedUpdate()
@@ -91,6 +140,62 @@ public class MyWheelCollider : MonoBehaviour
         CalculateRPM();
     }
 
+    private void OnDrawGizmos()
+    {
+        // Draw suspention length and wheel rest position
+        // to help place the collider and visual wheel correctly
+        Handles.DrawWireDisc(transform.position - springLength * restRatio * transform.up,
+                             transform.right, wheelRadius);
+
+        Handles.DrawLine(transform.position, transform.position - springLength * transform.up);
+
+        if (!debugWheel)
+            return;
+
+        // Force arrow of the wheel movement
+        Color color = Handles.color;
+        Handles.color = Color.green;
+
+        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.up, transform.up), upForce / 1000, EventType.Repaint);
+
+        Handles.color = Color.red;
+        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.right, transform.up), rightForce / 1000, EventType.Repaint);
+
+        Handles.color = Color.blue;
+        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.forward, transform.up), forwardForce / 1000, EventType.Repaint);
+        Handles.color = color;
+
+        // Draw lateral force curve
+        Vector3 lastPoint = transform.position;
+        float normalForce = 4000f;
+
+        Gizmos.color = Color.green;
+        bool first = true;
+
+        for (float angle = -20f; angle <= 20f; angle += 0.5f)
+        {
+            float force = CalculatePacejkaForce(angle, normalForce, lateralCoefficients);
+            Vector3 point = transform.position + new Vector3(angle * 0.1f, force * 0.001f, 0);
+
+            if (!first)
+            {
+                Gizmos.DrawLine(lastPoint, point);
+            }
+            first = false;
+            lastPoint = point;
+        }
+    }
+
+    void OnGUI()
+    {
+        // Draw the load supported on the wheel position
+        Vector3 pos = Camera.main.WorldToScreenPoint(wheelTransform.position);
+
+        pos.y = Screen.height - pos.y;
+        GUI.color = Color.magenta;
+        GUI.Label(new Rect(pos.x, pos.y, 200, 40), $"{loadSupported}");
+    }
+
     void CheckGroundedState()
     {
         Ray ray = new Ray(transform.position, -transform.up);
@@ -98,31 +203,28 @@ public class MyWheelCollider : MonoBehaviour
         // Reset states
         grounded = false;
         hasRaycastHit = false;
-        if (debugWheel)
-        {
-            visualWheelMaterial.color = Color.red;
-        }
 
         if (Physics.Raycast(ray, out hit, springLength + wheelRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             hasRaycastHit = true;
-            if (hit.distance < wheelTransform.localPosition.y - wheelVisualStartLocalPos.y + springLength + wheelRadius)
+            if (hit.distance < tireTransform.position.y + springLength + wheelRadius)
             {
                 grounded = true;
-                if (debugWheel)
-                {
-                    visualWheelMaterial.color = Color.green;
-                }
             }
         }
     }
 
+    /// <summary>
+    /// Temporary acceleration and resistance force
+    /// TODO : change force calculation with pacejka (handles grip)
+    /// TODO : Research about breaking calculation to make it more realistic (wheel lock, grip)
+    /// TODO : Add assistance system (ABS, TCS)
+    /// </summary>
     private void UpdateAccelerationForce()
     {
         forwardForce = 0f;
         if (grounded)
         {
-            // Temporary acceleration and resistance force
             if (motorized)
             {
                 forwardForce += wheelTorque / wheelRadius;
@@ -134,7 +236,7 @@ public class MyWheelCollider : MonoBehaviour
 
                 float breakForce = (breakValue * maxBreakTorque) / wheelRadius;
 
-                float maxForce = upForce; // TODO : Add friction coef when implemented
+                float maxForce = upForce;
 
                 float appliedBreakForce = Mathf.Min(breakForce, maxForce);
 
@@ -159,6 +261,9 @@ public class MyWheelCollider : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Temporary Steer force system (does not vary the grip, Change to Pacejka when it work)
+    /// </summary>
     private void UpdateWheelSteerForce()
     {
         rightForce = 0f;
@@ -185,9 +290,73 @@ public class MyWheelCollider : MonoBehaviour
         }
 
         wheelTransform.rotation = tireTransform.rotation;
-        wheelTransform.Rotate(-90, 90, 0);
+        wheelTransform.Rotate(wheelVisualStartRotation);
     }
 
+    /// <summary>
+    /// Steer force calculation with Pacejka (may be broken, to be investigated)
+    /// </summary>
+    private void UpdateWheelSteerForcePacejka()
+    {
+        rightForce = 0f;
+
+        if (steerable)
+        {
+            float steerAngle = Input.GetAxis("Horizontal") * 30;
+
+            tireTransform.localRotation = Quaternion.Euler(0, steerAngle, 0);
+        }
+        if (grounded)
+        {
+            float forwardVel = Vector3.Dot(tireVel, tireTransform.forward);
+            float lateralVel = Vector3.Dot(tireVel, tireTransform.right);
+
+            float slipAngle = Mathf.Atan2(lateralVel, Mathf.Abs(forwardVel)) * Mathf.Rad2Deg;
+
+            rightForce = -CalculatePacejkaForce(slipAngle * Mathf.Deg2Rad, upForce, lateralCoefficients);
+
+            carRigidbody.AddForceAtPosition(rightForce * tireTransform.right, tireTransform.position);
+        }
+
+        wheelTransform.rotation = tireTransform.rotation;
+        wheelTransform.Rotate(wheelVisualStartRotation);
+    }
+
+    /// <summary>
+    /// Some function found on the web, check if the function is the right one/if it is working as expected
+    /// </summary>
+    private float CalculatePacejkaForce(float slipInput, float normalForce, TireCoefficients coeff)
+    {
+        // Apply horizontal shift
+        float x = slipInput + coeff.Sh;
+
+        // Calculate B from the relationship: BCD = cornering stiffness
+        // B is calculated such that B * C * D = BCD
+        float B = coeff.BCD / (coeff.C * coeff.D);
+
+        // Scale peak force by normal load
+        // D represents the peak force coefficient
+        float D = coeff.D * normalForce;
+
+        // Calculate intermediate values
+        float Bx = B * x;
+        float atanBx = Mathf.Atan(Bx);
+
+        // Main Magic Formula
+        // y = D * sin(C * atan(B*x - E*(B*x - atan(B*x))))
+        float innerTerm = Bx - coeff.E * (Bx - atanBx);
+        float y = D * Mathf.Sin(coeff.C * Mathf.Atan(innerTerm));
+
+        // Apply vertical shift
+        y += coeff.Sv;
+
+        return y;
+    }
+
+
+    /// <summary>
+    /// Wheel suspension force (Seems like it has some weird behaviour, need to check ASAP)
+    /// </summary>
     void UpdateWheelSuspensionForce()
     {
         upForce = 0f;
@@ -229,40 +398,6 @@ public class MyWheelCollider : MonoBehaviour
         }
     }
 
-    private void OnDrawGizmos()
-    {
-        // Draw suspention length and wheel rest position
-        // to help place the collider and visual wheel correctly
-        Handles.DrawWireDisc(transform.position - springLength * restRatio * transform.up,
-                             transform.right, wheelRadius);
-
-        Handles.DrawLine(transform.position, transform.position - springLength * transform.up);
-
-        if (!debugWheel)
-            return;
-
-        Color color = Handles.color;
-        Handles.color = Color.green;
-
-        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.up, transform.up), upForce / 1000, EventType.Repaint);
-
-        Handles.color = Color.red;
-        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.right, transform.up), rightForce / 1000, EventType.Repaint);
-
-        Handles.color = Color.blue;
-        Handles.ArrowHandleCap(0, wheelTransform.position, Quaternion.LookRotation(transform.forward, transform.up), forwardForce / 1000, EventType.Repaint);
-        Handles.color = color;
-    }
-
-    void OnGUI()
-    {
-        Vector3 pos = Camera.main.WorldToScreenPoint(wheelTransform.position);
-
-        pos.y = Screen.height - pos.y;
-        GUI.color = Color.magenta;
-        GUI.Label(new Rect(pos.x, pos.y, 200, 40), $"{loadSupported}");
-    }
-
     public void SetWheelTorque(float torque)
     {
         wheelTorque = torque;
@@ -285,7 +420,6 @@ public class MyWheelCollider : MonoBehaviour
     void CalculateTireVelocity()
     {
         tireVel = (tireTransform.position - lastFramePos) / Time.fixedDeltaTime;
-
 
         lastFramePos = tireTransform.position;
     }

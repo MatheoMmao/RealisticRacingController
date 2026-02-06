@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
 using Unity.Properties;
 using Unity.VisualScripting;
 using Unity.VisualScripting.Antlr3.Runtime.Tree;
@@ -6,48 +7,81 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+[RequireComponent(typeof(Rigidbody))]
 public class CarPhysics : MonoBehaviour
 {
+    #region OutsideInput
     [Header("Outside Input")]
-    [SerializeField][Tooltip("Air density in km/m^3")] float airDensity = 1.29f;
-    [SerializeField] float dragCoef = 0.3f;
-    [SerializeField][Tooltip("Frontal area of the car in m^2")] float frontalArea = 2.2f;
-    [SerializeField] Vector3 dragForce;
+    [SerializeField, Tooltip("Air density in km/m^3")] 
+    float airDensity = 1.29f;
+    [SerializeField] 
+    float dragCoef = 0.3f;
+    [SerializeField, Tooltip("Frontal area of the car in m^2")] 
+    float frontalArea = 2.2f;
+    [SerializeField] 
+    Vector3 dragForce;
+    #endregion
 
+    #region Inputs
     [Header("Inputs")]
-    [SerializeField][Range(0f, 1f)] float throttleValue;
-    [SerializeField] float speedChangeThrottleValue = 1f;
-    [SerializeField][Range(0f, 1f)] float breakValue;
-    [SerializeField] float speedChangeBreakValue = 1f;
+    [SerializeField, Range(0f, 1f)] 
+    float throttleValue;
+    [SerializeField] 
+    float speedChangeThrottleValue = 1f;
+    [SerializeField, Range(0f, 1f)] 
+    float breakValue;
+    [SerializeField] 
+    float speedChangeBreakValue = 1f;
+    #endregion
 
+    #region Engine
     [Header("Engine")]
-    [SerializeField] float minEngineTorque = 400;
-    [SerializeField] float maxEngineTorque = 500;
-    [SerializeField] float minEngineRPM = 1000;
-    [SerializeField] float maxEngineRPM = 6000;
-    [SerializeField] float RPM;
-    [SerializeField] float engineTorque;
+    [SerializeField] 
+    float minEngineTorque = 400;
+    [SerializeField] 
+    float maxEngineTorque = 500;
+    [SerializeField] 
+    float minEngineRPM = 1000;
+    [SerializeField] 
+    float maxEngineRPM = 6000;
+    [SerializeField] 
+    float RPM;
+    [SerializeField] 
+    float engineTorque;
 
     [SerializeField]
     AnimationCurve RPMToTorqueCurve = new AnimationCurve(new Keyframe(0, 0, 0, 0.5f),
         new Keyframe(0.8f, 1, 0, 0), new Keyframe(1, 0, -4, 0));
+    #endregion
 
+    #region Transmission
     [Header("Transmission")]
-    [SerializeField] float gearRatio = 2.66f;
-    [SerializeField] float differentialRatio = 3.42f;
-    [SerializeField][Range(0f, 1f)] float transmissionEfficiency = 0.7f;
+    [SerializeField] 
+    float gearRatio = 2.66f;
+    [SerializeField] 
+    float differentialRatio = 3.42f;
+    [SerializeField, Range(0f, 1f)] 
+    float transmissionEfficiency = 0.7f;
+    #endregion
 
+    #region Wheels
     [Header("Wheels")]
-    [SerializeField] MyWheelCollider[] wheelColliders;
-    [SerializeField] float wheelTorque;
-    [SerializeField] float wheelsRPM;
+    [SerializeField] 
+    MyWheelCollider[] wheelColliders;
+    [SerializeField] 
+    float wheelTorque;
+    [SerializeField] 
+    float wheelsRPM;
 
     Vector3 wheelBase;
+    #endregion
+
 
     Vector3 lastFrameVelocity = Vector3.zero;
     Vector3 lastFrameAcceleration = Vector3.zero;
-
     Rigidbody rb;
+
+    public bool debug = false;
 
     private void Start()
     {
@@ -104,8 +138,6 @@ public class CarPhysics : MonoBehaviour
         {
             Vector3 wheelPosLocal = transform.InverseTransformPoint(collider.GetWheelTransformPosition())- rb.centerOfMass;
 
-            Debug.Log($"Collider : {collider.name} : {wheelPosLocal}");
-
             float loadSupported = CalculateWheelLoadSupported(wheelPosLocal);
             collider.SetLoadSupported(loadSupported);
 
@@ -115,14 +147,34 @@ public class CarPhysics : MonoBehaviour
             collider.SetBreakValue(breakValue);
         }
 
+        // Display speed debug waiting for ui (m/s)
         Debug.Log(rb.linearVelocity.magnitude);
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (!debug)
+        {
+            return;
+        }
+        UnityEngine.Color color = Handles.color;
+
+        // Acceleration arrow
+        Handles.color = UnityEngine.Color.red;
+        Handles.ArrowHandleCap(0, transform.position, Quaternion.LookRotation(lastFrameAcceleration, transform.up), lastFrameAcceleration.magnitude * 1000, EventType.Repaint);
+
+        // Velocity arrow
+        Handles.color = UnityEngine.Color.blue;
+        if (rb)
+        {
+            Handles.ArrowHandleCap(0, transform.position, Quaternion.LookRotation(rb.linearVelocity, transform.up), rb.linearVelocity.magnitude * 1000, EventType.Repaint);
+        }
+        Handles.color = color;
     }
 
     void CalculateLastFrameAcceleration()
     {
         Vector3 velocityChange = rb.linearVelocity - lastFrameVelocity;
-
-        Debug.Log($"Velocity change : {velocityChange}");
 
         lastFrameAcceleration = velocityChange / Time.fixedDeltaTime;
 
@@ -131,6 +183,7 @@ public class CarPhysics : MonoBehaviour
 
     float CalculateEngineRPM(float wheelRPM, float gearRatio, float differentialRatio)
     {
+        // Get the engine RPM with the wheel rpm to complete the loop
         return wheelRPM * gearRatio * differentialRatio;
     }
 
@@ -147,24 +200,29 @@ public class CarPhysics : MonoBehaviour
         return torqueEngine * gearRatio * differentialRatio * transmissionEfficiency;
     }
 
-    // Calculate the average rpm for the wheels
+    /// <summary>
+    /// Calculate the average rpm for the motorized wheels
+    /// </summary>
     float CalculateWheelRPM()
     {
         float sum = 0;
-        int nbDrivenWheel = 0;
+        int nbMotorizedWheel = 0;
 
         foreach (MyWheelCollider wheel in wheelColliders)
         {
             if (wheel.IsMotorized())
             {
                 sum += wheel.GetRPM();
-                nbDrivenWheel++;
+                nbMotorizedWheel++;
             }
         }
 
-        return sum / nbDrivenWheel;
+        return sum / nbMotorizedWheel;
     }
 
+    /// <summary>
+    /// Calculate the air resistance of the car (only work for front resistance for now, need to change it later)
+    /// </summary>
     Vector3 CalculateDragForce(float dragCoef, float frontalArea, float airDensity, Vector3 velocity)
     {
         Vector3 forwardVelocity = Vector3.Project(velocity, transform.forward);
@@ -172,6 +230,11 @@ public class CarPhysics : MonoBehaviour
         return -0.5f * dragCoef * frontalArea * airDensity * forwardVelocity.magnitude * forwardVelocity;
     }
 
+    /// <summary>
+    /// Calculate the load that each wheel support (may be broken to be investigated)
+    /// </summary>
+    /// <param name="wheelPos"></param>
+    /// <returns></returns>
     float CalculateWheelLoadSupported(Vector3 wheelPos)
     {
         float heightCG = GetCOMHeight();
@@ -188,15 +251,16 @@ public class CarPhysics : MonoBehaviour
         float dF_lat = (rb.mass * localAcceleration.x * heightCG) / wheelBase.x;
 
         wheelLoad += Mathf.Sign(-wheelPos.z) * dF_long * 0.5f;
-        Debug.Log($"{wheelPos} --- {heightCG} --- {totalWeight} --- {axleLoad} --- {wheelLoad} --- {dF_long} --- {dF_lat} --- {wheelLoad} --- {lastFrameAcceleration}");
 
         wheelLoad += Mathf.Sign(wheelPos.x) * dF_lat * 0.5f;
-
-        Debug.Log($"{wheelLoad}");
 
         return wheelLoad;
     }
 
+
+    /// <summary>
+    /// Calculate the Wheel Base (The distance between the extremum wheels)
+    /// </summary>
     void CalculateWheelBase()
     {
         Vector3 frontMaxWheelPos = Vector3.zero;

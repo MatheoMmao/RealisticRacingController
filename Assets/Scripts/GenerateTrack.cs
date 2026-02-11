@@ -17,7 +17,7 @@ public class GenerateTrack : MonoBehaviour
     {
         if (Vector3.Distance(car.transform.position, transform.position)>20)
         {
-            Destroy(transform.parent.gameObject);
+            //Destroy(transform.parent.gameObject);
         }
     }
 

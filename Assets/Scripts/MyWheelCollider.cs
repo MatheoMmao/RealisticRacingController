@@ -207,7 +207,8 @@ public class MyWheelCollider : MonoBehaviour
         if (Physics.Raycast(ray, out hit, springLength + wheelRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             hasRaycastHit = true;
-            if (hit.distance < tireTransform.position.y + springLength + wheelRadius)
+
+            if (hit.distance < Mathf.Abs(tireTransform.position.y) + springLength + wheelRadius)
             {
                 grounded = true;
             }
@@ -457,6 +458,6 @@ public class MyWheelCollider : MonoBehaviour
             point = tireTransform.position - tireTransform.up * wheelRadius;
             return true;
         }
-        return false;
+            return false;
     }
 }

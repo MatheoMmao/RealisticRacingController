@@ -92,6 +92,12 @@ public class CarPhysics : MonoBehaviour
 
     private void Update()
     {
+        // Debug Reverse Input
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            gearRatio *= -1;
+        }
+
         float directionInput = Input.GetAxisRaw("Vertical");
 
         // Delay the inputs to avoid sharp inputs on keyboard
@@ -136,19 +142,18 @@ public class CarPhysics : MonoBehaviour
         // Give the values to all the wheelColliders
         foreach (var collider in wheelColliders)
         {
-            Vector3 wheelPosLocal = transform.InverseTransformPoint(collider.GetWheelTransformPosition())- rb.centerOfMass;
+            Vector3 wheelPosLocal = collider.transform.localPosition- rb.centerOfMass;
 
             float loadSupported = CalculateWheelLoadSupported(wheelPosLocal);
             collider.SetLoadSupported(loadSupported);
 
-            wheelTorque = CalculateWheelTorque(engineTorque, gearRatio, differentialRatio, transmissionEfficiency,
-                collider.GetWheelRadius());
+            wheelTorque = CalculateWheelTorque(engineTorque, gearRatio, differentialRatio, transmissionEfficiency);
             collider.SetWheelTorque(wheelTorque);
             collider.SetBreakValue(breakValue);
         }
 
-        // Display speed debug waiting for ui (m/s)
-        Debug.Log(rb.linearVelocity.magnitude);
+        // Display speed debug waiting for ui (km/h)
+        Debug.Log(rb.linearVelocity.magnitude * 3.6f);
     }
 
     private void OnDrawGizmos()
@@ -195,9 +200,9 @@ public class CarPhysics : MonoBehaviour
     }
 
     float CalculateWheelTorque(float torqueEngine, float gearRatio, float differentialRatio,
-        float transmissionEfficiency, float wheelRadius)
+        float transmissionEfficiency)
     {
-        return torqueEngine * gearRatio * differentialRatio * transmissionEfficiency;
+        return (torqueEngine * gearRatio * differentialRatio * transmissionEfficiency)/2f;
     }
 
     /// <summary>
@@ -311,7 +316,7 @@ public class CarPhysics : MonoBehaviour
     float GetCOMHeight()
     {
         // Convert COM to car local space
-        Vector3 comLocal = transform.InverseTransformPoint(rb.worldCenterOfMass);
+        Vector3 comLocal = rb.centerOfMass;
 
         // Find lowest wheel contact in car local space
         float lowestYLocal = float.MaxValue;
@@ -321,7 +326,7 @@ public class CarPhysics : MonoBehaviour
             if (wc.GetLowestPoint(out Vector3 lowestPoint))
             {
                 // Convert wheel contact point to car local space
-                Vector3 contactLocal = transform.InverseTransformPoint(lowestPoint);
+                Vector3 contactLocal = lowestPoint - transform.position;
                 lowestYLocal = Mathf.Min(lowestYLocal, contactLocal.y);
             }
         }
